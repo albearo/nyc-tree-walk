@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1b4332">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>NYC Tree Walk</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root {
+  --gd: #1b4332;
+  --gm: #2d6a4f;
+  --gl: #40916c;
+  --ga: #74c69d;
+  --gp: #d8f3dc;
+  --bg: #f0faf3;
+  --card: #ffffff;
+  --border: #d8eedd;
+  --text: #1a2e1e;
+  --muted: #5a7a62;
+  --shadow: 0 2px 16px rgba(0,0,0,0.09);
+  --r: 14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+
+/* ── HEADER ── */
+#hdr{background:var(--gd);color:#fff;padding:10px 16px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.hdr-title{font-size:1.15rem;font-weight:700;letter-spacing:-.3px}
+.hdr-sub{font-size:.68rem;opacity:.7;margin-top:1px}
+.quiz-wrap{display:flex;align-items:center;gap:7px;font-size:.78rem;color:#fff}
+.toggle{position:relative;width:42px;height:23px}
+.toggle input{display:none}
+.tslider{position:absolute;inset:0;background:rgba(255,255,255,.28);border-radius:23px;cursor:pointer;transition:.2s}
+.tslider::before{content:'';position:absolute;width:17px;height:17px;background:#fff;border-radius:50%;top:3px;left:3px;transition:.2s}
+.toggle input:checked+.tslider{background:var(--ga)}
+.toggle input:checked+.tslider::before{transform:translateX(19px)}
+
+/* ── CONTENT ── */
+#content{flex:1;overflow:hidden;position:relative}
+.view{position:absolute;inset:0;overflow-y:auto;display:none;-webkit-overflow-scrolling:touch}
+.view.active{display:block}
+#map-view{overflow:hidden}
+#map{width:100%;height:100%}
+
+/* ── MAP OVERLAYS ── */
+#loc-badge{position:absolute;top:8px;left:8px;z-index:1000;background:#fff;border-radius:20px;padding:6px 12px;font-size:.72rem;box-shadow:var(--shadow);display:flex;align-items:center;gap:6px;pointer-events:none}
+.sdot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0}
+.sdot.on{background:#4caf50;animation:blink 2s infinite}
+.sdot.err{background:#ef5350}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+#center-btn{position:absolute;top:8px;right:8px;z-index:1000;background:#fff;border:none;border-radius:10px;width:36px;height:36px;font-size:1.1rem;box-shadow:var(--shadow);cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+#prox-card{position:absolute;bottom:10px;left:8px;right:8px;z-index:1000;background:#fff;border-radius:var(--r);box-shadow:0 4px 24px rgba(0,0,0,.16);padding:14px;display:none;animation:sup .3s ease}
+@keyframes sup{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.pc-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.pc-icon{width:42px;height:42px;background:var(--gp);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0}
+.pc-name{font-size:1rem;font-weight:700;color:var(--gd);text-transform:capitalize}
+.pc-dist{font-size:.73rem;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{background:var(--gp);color:var(--gd);border-radius:20px;padding:3px 10px;font-size:.7rem;font-weight:500}
+.chip.good{background:#e8f5e9;color:#2e7d32}
+.chip.fair{background:#fff3e0;color:#e65100}
+.chip.poor{background:#fce4ec;color:#c62828}
+.pc-btns{display:flex;gap:8px}
+.btn{padding:9px 14px;border-radius:20px;border:none;font-size:.8rem;font-weight:600;cursor:pointer;flex:1;transition:.15s;text-align:center}
+.btn:active{transform:scale(.97)}
+.btn-p{background:var(--gm);color:#fff}
+.btn-s{background:var(--gp);color:var(--gd)}
+
+/* ── NEARBY TAB ── */
+#nearby-view{padding:14px}
+.vtitle{font-size:1.05rem;font-weight:700;color:var(--gd);margin-bottom:3px}
+.vsub{font-size:.77rem;color:var(--muted);margin-bottom:14px}
+.tlist{display:flex;flex-direction:column;gap:9px}
+.tc{background:#fff;border-radius:var(--r);padding:13px;box-shadow:var(--shadow);border:1px solid var(--border);cursor:pointer;transition:.15s}
+.tc:active{transform:scale(.985)}
+.tc-head{display:flex;align-items:flex-start;gap:9px}
+.tc-ico{font-size:1.7rem;flex-shrink:0;line-height:1}
+.tc-name{font-size:.93rem;font-weight:600;color:var(--gd);text-transform:capitalize}
+.tc-sci{font-size:.72rem;color:var(--muted);font-style:italic}
+.tc-dist{margin-left:auto;font-size:.72rem;color:var(--muted);white-space:nowrap;padding-left:6px}
+.tc-chips{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+
+/* ── QUIZ TAB ── */
+#quiz-view{padding:14px;display:flex;flex-direction:column}
+.score-bar{background:var(--gd);color:#fff;border-radius:var(--r);padding:13px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-shrink:0}
+.sb-lbl{font-size:.68rem;opacity:.75;margin-bottom:2px}
+.sb-val{font-size:1.4rem;font-weight:700}
+#quiz-body{flex:1}
+.qcard{background:#fff;border-radius:var(--r);padding:18px;box-shadow:var(--shadow);margin-bottom:12px}
+.qprompt{font-size:1rem;font-weight:700;color:var(--gd);margin-bottom:10px}
+.qclues{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.qclue{font-size:.83rem;line-height:1.4}
+.qopts{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.qopt{background:var(--gp);border:2px solid transparent;border-radius:11px;padding:13px 10px;font-size:.82rem;font-weight:600;color:var(--gd);cursor:pointer;text-align:center;text-transform:capitalize;transition:.15s;line-height:1.3}
+.qopt:hover{background:var(--ga);color:#fff}
+.qopt.cor{background:#e8f5e9;border-color:#4caf50;color:#2e7d32}
+.qopt.wrg{background:#fce4ec;border-color:#ef5350;color:#c62828}
+.qopt:disabled{cursor:default}
+.qopt:disabled:hover{background:var(--gp);color:var(--gd)}
+.qopt.cor:hover,.qopt.cor:disabled:hover{background:#e8f5e9;color:#2e7d32}
+.qopt.wrg:hover,.qopt.wrg:disabled:hover{background:#fce4ec;color:#c62828}
+.qresult{background:#fff;border-radius:var(--r);padding:16px;box-shadow:var(--shadow);display:none}
+.qresult.show{display:block}
+.qr-hd{font-size:1.1rem;font-weight:700;margin-bottom:6px}
+.qr-sp{font-size:.95rem;font-weight:600;color:var(--gd);text-transform:capitalize;margin-bottom:6px}
+.qr-desc{font-size:.82rem;color:var(--muted);line-height:1.5;margin-bottom:8px}
+.qr-fact{font-size:.8rem;color:var(--gd);background:var(--gp);border-radius:8px;padding:8px 11px;margin-bottom:10px;font-style:italic}
+.qr-btns{display:flex;gap:8px}
+
+/* ── SPECIES TAB ── */
+#species-view{padding:14px}
+.scard{background:#fff;border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden;margin-bottom:9px}
+.scard-hd{padding:13px;cursor:pointer;display:flex;align-items:center;gap:11px;user-select:none}
+.scard-ico{font-size:1.9rem;flex-shrink:0}
+.scard-name{font-size:.93rem;font-weight:700;color:var(--gd);text-transform:capitalize}
+.scard-sci{font-size:.7rem;color:var(--muted);font-style:italic}
+.scard-rank{margin-left:auto;font-size:.68rem;color:var(--muted);text-align:right;flex-shrink:0}
+.scard-body{padding:0 13px 13px;display:none}
+.scard-body.open{display:block}
+.srow{display:flex;gap:6px;font-size:.8rem;line-height:1.45;margin-bottom:6px}
+.srow-ico{flex-shrink:0}
+.sfact{background:var(--gp);border-radius:8px;padding:9px 11px;font-size:.79rem;color:var(--gd);margin-top:8px;font-style:italic;line-height:1.4}
+.sqbtn{margin-top:10px;padding:8px 16px;border-radius:20px;border:none;background:var(--gm);color:#fff;font-size:.79rem;font-weight:600;cursor:pointer}
+
+/* ── NAV ── */
+#nav{background:#fff;border-top:1px solid var(--border);display:flex;flex-shrink:0;padding-bottom:env(safe-area-inset-bottom,0)}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;padding:9px 4px 10px;font-size:.62rem;color:var(--muted);background:none;border:none;cursor:pointer;gap:3px;transition:.12s}
+.nb .ni{font-size:1.3rem;transition:.12s}
+.nb.active{color:var(--gd)}
+.nb.active .ni{transform:scale(1.15)}
+
+/* ── MODAL ── */
+#moverlay{position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:3000;display:none;align-items:flex-end}
+#moverlay.show{display:flex}
+#modal{background:#fff;border-radius:20px 20px 0 0;padding:18px;width:100%;max-height:88vh;overflow-y:auto;animation:mup .28s ease}
+@keyframes mup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.mhandle{width:38px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 16px}
+.mtitle{font-size:1.25rem;font-weight:700;color:var(--gd);text-transform:capitalize;margin-bottom:3px}
+.mlatin{font-size:.82rem;color:var(--muted);font-style:italic;margin-bottom:14px}
+.msec{margin-bottom:14px}
+.msec-t{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:7px}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.mcell{background:var(--gp);border-radius:9px;padding:10px 12px}
+.mcell-l{font-size:.67rem;color:var(--muted);margin-bottom:2px}
+.mcell-v{font-size:.9rem;font-weight:600;color:var(--gd)}
+.eco-list{display:flex;flex-direction:column;gap:6px}
+.eco-item{font-size:.81rem;display:flex;align-items:center;gap:7px}
+.mid-list{display:flex;flex-direction:column;gap:6px;font-size:.81rem;line-height:1.4}
+.mfact{background:var(--gp);border-radius:9px;padding:10px 12px;font-size:.8rem;color:var(--gd);font-style:italic;line-height:1.4}
+.mclose{width:100%;padding:13px;background:var(--gd);color:#fff;border:none;border-radius:var(--r);font-size:.9rem;font-weight:600;cursor:pointer;margin-top:6px}
+
+/* ── TOAST ── */
+#toast{position:fixed;top:64px;left:50%;transform:translateX(-50%) translateY(-6px);background:rgba(27,67,50,.93);color:#fff;padding:9px 18px;border-radius:20px;font-size:.82rem;z-index:9999;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── EMPTY / LOADING ── */
+.empty{text-align:center;padding:36px 20px;color:var(--muted)}
+.empty .big{font-size:2.8rem;margin-bottom:10px}
+.empty p{font-size:.87rem;line-height:1.55}
+.spinner{width:22px;height:22px;border:3px solid var(--gp);border-top-color:var(--gm);border-radius:50%;animation:spin .7s linear infinite;margin:24px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HEADER -->
+<div id="hdr">
+  <div>
+    <div class="hdr-title">🌳 NYC Tree Walk</div>
+    <div class="hdr-sub">Explore New York's urban forest</div>
+  </div>
+  <div class="quiz-wrap">
+    <span>Quiz</span>
+    <label class="toggle">
+      <input type="checkbox" id="quiz-toggle">
+      <span class="tslider"></span>
+    </label>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div id="content">
+
+  <!-- MAP -->
+  <div id="map-view" class="view active">
+    <div id="map"></div>
+    <div id="loc-badge">
+      <div class="sdot" id="sdot"></div>
+      <span id="slabel">Locating…</span>
+    </div>
+    <button id="center-btn" title="Center on me">📍</button>
+    <div id="prox-card">
+      <div class="pc-head">
+        <div class="pc-icon" id="pc-icon">🌳</div>
+        <div>
+          <div class="pc-name" id="pc-name">Tree</div>
+          <div class="pc-dist" id="pc-dist"></div>
+        </div>
+      </div>
+      <div class="chips" id="pc-chips"></div>
+      <div class="pc-btns">
+        <button class="btn btn-p" onclick="openModal()">Learn More</button>
+        <button class="btn btn-s" onclick="quizNearest()">Quiz Me</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEARBY -->
+  <div id="nearby-view" class="view">
+    <div class="vtitle">Nearby Trees</div>
+    <div class="vsub" id="nearby-sub">Trees within ~300 m</div>
+    <div class="tlist" id="tlist">
+      <div class="empty"><div class="big">📍</div><p>Enable location to see trees near you.</p></div>
+    </div>
+  </div>
+
+  <!-- QUIZ -->
+  <div id="quiz-view" class="view">
+    <div class="score-bar">
+      <div><div class="sb-lbl">Score</div><div class="sb-val" id="sc-score">0 / 0</div></div>
+      <div style="text-align:right"><div class="sb-lbl">Streak</div><div class="sb-val" id="sc-streak">🌱 0</div></div>
+    </div>
+    <div id="quiz-body">
+      <div class="empty">
+        <div class="big">🎯</div>
+        <p>Walk near a tree to start a quiz!<br><br>Turn on <strong>Quiz Mode</strong> in the header and the app will automatically challenge you as you pass trees.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPECIES -->
+  <div id="species-view" class="view">
+    <div class="vtitle">Species Guide</div>
+    <div class="vsub">NYC's most common street trees — tap to expand</div>
+    <div id="slist"></div>
+  </div>
+
+</div><!-- /content -->
+
+<!-- NAV -->
+<nav id="nav">
+  <button class="nb active" id="tab-map"     onclick="go('map')"><span class="ni">🗺️</span>Map</button>
+  <button class="nb"         id="tab-nearby"  onclick="go('nearby')"><span class="ni">🌳</span>Nearby</button>
+  <button class="nb"         id="tab-quiz"    onclick="go('quiz')"><span class="ni">🎯</span>Quiz</button>
+  <button class="nb"         id="tab-species" onclick="go('species')"><span class="ni">📚</span>Species</button>
+</nav>
+
+</div><!-- /app -->
+
+<!-- MODAL -->
+<div id="moverlay" onclick="closeModal()">
+  <div id="modal" onclick="event.stopPropagation()">
+    <div class="mhandle"></div>
+    <div id="mcontent"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+// SPECIES DATABASE
+// ═══════════════════════════════════════════════════════
+const DB = {
+  'london planetree':{emoji:'🌿',sci:'Platanus × acerifolia',rank:1,
+    desc:"NYC's most common street tree, prized for extreme pollution tolerance and dappled shade. Its camouflage bark is unmistakable.",
+    leaves:'Large, 3–5 lobed, maple-like; 15–30 cm wide',
+    bark:'Peeling patches of cream, tan, and olive — camouflage pattern',
+    seeds:'Spiky brown balls (1–3 cm) on long drooping stems',
+    hint:'Camouflage-patterned peeling bark found on no other common tree',
+    fact:'London planetrees can live 400+ years. They tolerate road salt, compacted soil, and air pollution better than almost any other tree.'},
+  'honeylocust':{emoji:'🌱',sci:'Gleditsia triacanthos var. inermis',rank:2,
+    desc:'Fine feathery leaves cast dappled shade. Twisted seed pods litter sidewalks in autumn. City trees are bred thornless.',
+    leaves:'Twice-compound with tiny oval leaflets — delicate, lacy appearance',
+    bark:'Dark gray-brown with interlacing ridges',
+    seeds:'Long twisted reddish-brown pods (20–45 cm) in autumn',
+    hint:'Fern-like canopy; long twisted pods on the ground in fall',
+    fact:'Wild honeylocusts have terrifying thorns up to 20 cm long. The city plants a thornless variety.'},
+  'callery pear':{emoji:'🌸',sci:'Pyrus calleryana',rank:3,
+    desc:'Spectacular white spring blooms, but with an infamous fishy odor. Glossy leaves turn vivid red-purple in fall.',
+    leaves:'Glossy, oval with wavy edges; brilliant red-orange-purple in fall',
+    bark:'Gray-brown, developing shallow furrows',
+    seeds:'Tiny hard pear-like fruits (≈1 cm) that turn russet in fall',
+    hint:'White flower clusters in early spring — and a fishy smell',
+    fact:'Callery pear flowers are pollinated by flies, not bees — hence the rotting-fish scent.'},
+  'pin oak':{emoji:'🍂',sci:'Quercus palustris',rank:4,
+    desc:'A classic American oak with deeply lobed leaves. Lower branches droop characteristically downward.',
+    leaves:'5–7 deep lobes with bristle-tipped points; scarlet red in fall',
+    bark:'Gray-brown, smooth when young; furrowed with age',
+    seeds:'Small round acorns (≈1 cm) with shallow caps; abundant in fall',
+    hint:'Lower branches droop down — unusual among oaks',
+    fact:'Pin oaks often hold their dead brown leaves through winter, a phenomenon called marcescence.'},
+  'norway maple':{emoji:'🍁',sci:'Acer platanoides',rank:5,
+    desc:'Dense shade tree with 5-lobed leaves nearly identical to sugar maple. Snap a leaf stem — it bleeds milky white sap.',
+    leaves:'5-lobed; break stem to reveal milky sap (sugar maple bleeds clear)',
+    bark:'Gray with narrow, interlacing ridges',
+    seeds:'Paired samara "helicopters" with widely spread wings (≈180°)',
+    hint:'Break a leaf stem — milky white sap = Norway maple',
+    fact:'Norway maples are so invasive in North America they crowd out native understory plants in forests.'},
+  'ginkgo':{emoji:'🌬️',sci:'Ginkgo biloba',rank:6,
+    desc:'A living fossil unchanged for 200 million years. Fan-shaped leaves turn brilliant gold in autumn. Female trees drop foul-smelling fruits.',
+    leaves:'Unique fan shape with a central notch — no other tree looks like it',
+    bark:'Gray-brown, developing deep irregular furrows',
+    seeds:'Plum-like yellow fruits with a notoriously foul odor (female trees only)',
+    hint:'Fan-shaped leaves are completely unique in the plant kingdom',
+    fact:'Ginkgo trees survived the Hiroshima atomic bomb. Six trees within 2 km of the hypocenter are still alive today.'},
+  'japanese zelkova':{emoji:'🌲',sci:'Zelkova serrata',rank:7,
+    desc:'A graceful elm relative with a vase-shaped crown, planted widely to replace elms lost to Dutch elm disease.',
+    leaves:'Oval with serrated edges; smaller than elm; orange-red in fall',
+    bark:'Gray-brown, flaking in patches to reveal orange underlayer',
+    seeds:'Tiny hard drupes (≈6 mm)',
+    hint:'Vase-shaped silhouette; bark flakes to show orange patches',
+    fact:'Zelkova was chosen as the elm replacement because of its similar elegant vase-shaped form.'},
+  'littleleaf linden':{emoji:'💛',sci:'Tilia cordata',rank:8,
+    desc:'Beloved for overwhelmingly fragrant summer flowers that attract clouds of bees. Heart-shaped leaves and a tidy oval crown.',
+    leaves:'Small heart-shaped, asymmetric base; dark green above, pale below',
+    bark:'Gray with vertical ridges and fissures',
+    seeds:'Round nutlets attached to a distinctive elongated wing bract',
+    hint:'In July: an incredible honey-like fragrance fills the air around these trees',
+    fact:'Linden honey is among the most prized in Europe. NYC lindens buzz with thousands of bees each July.'},
+  'cherry':{emoji:'🌸',sci:'Prunus spp.',rank:9,
+    desc:'Various ornamental cherry species planted for spectacular spring blooms. All cherries share the distinctive horizontal-lined bark.',
+    leaves:'Oval with finely serrated edges; often bronze-tinged; yellow-orange in fall',
+    bark:'Distinctive horizontal lenticels (lines) run around the trunk',
+    seeds:'Small red to black cherries (usually not palatable)',
+    hint:'Horizontal lines (lenticels) on the bark identify all cherry trees',
+    fact:"NYC's cherry trees include trees gifted from Japan. Brooklyn Botanic Garden has one of the best cherry displays outside Japan."},
+  'silver maple':{emoji:'🍂',sci:'Acer saccharinum',rank:10,
+    desc:'Fast-growing maple with deeply cut leaves that flash silver in the breeze, making the canopy shimmer.',
+    leaves:'5 deeply cut lobes; silvery-white undersides visible in wind',
+    bark:'Gray, becoming shaggy and flaking on older trees',
+    seeds:'Large paired samaras — biggest "helicopters" of any NYC maple',
+    hint:'Leaves flash silver-white underneath whenever the wind blows',
+    fact:'Silver maples produce the earliest spring flowers of any NYC maple — sometimes blooming in February.'},
+  'green ash':{emoji:'🌿',sci:'Fraxinus pennsylvanica',rank:11,
+    desc:'A native ash once common on NYC streets, now severely threatened by the invasive Emerald Ash Borer beetle.',
+    leaves:'Compound with 5–9 leaflets; turns yellow in fall',
+    bark:'Gray with diamond-shaped ridges forming an interlacing pattern',
+    seeds:'Single paddle-shaped samaras in hanging clusters',
+    hint:'Compound leaves (multiple leaflets on one stem) + diamond-pattern bark',
+    fact:'The Emerald Ash Borer has killed over 8 billion ash trees across North America since arriving in 2002.'},
+  'sweetgum':{emoji:'⭐',sci:'Liquidambar styraciflua',rank:12,
+    desc:'Star-shaped leaves and spiky seed balls that litter sidewalks in fall. Brilliant multicolor autumn foliage.',
+    leaves:'5–7 pointed star-shaped lobes; purple, red, and orange in fall',
+    bark:'Gray with corky ridges; branches often develop corky wings',
+    seeds:'Hard spiky brown balls (3–4 cm) that persist through winter',
+    hint:'Star-shaped leaves and spiky "gum balls" on the ground',
+    fact:'Sweetgum resin (storax) was chewed by Native Americans as a natural gum and used medicinally.'},
+  'sophora':{emoji:'☯️',sci:'Styphnolobium japonicum',rank:13,
+    desc:'Also called Japanese pagoda tree. Blooms fragrant white flowers in August when almost no other tree flowers.',
+    leaves:'Compound with 7–17 oval leaflets; similar to locust',
+    bark:'Dark gray-brown with deep, rough, interlacing furrows',
+    seeds:'Beaded pod like a string of pearls (seeds visible through pod)',
+    hint:'Flowers white in late summer (August) — rare for NYC trees',
+    fact:"The pagoda tree is one of few large trees that flowers in midsummer. It's sacred in Japanese and Chinese culture."},
+  'american elm':{emoji:'🏛️',sci:'Ulmus americana',rank:14,
+    desc:"The iconic vase-shaped elm that once lined American streets. Nearly lost to Dutch elm disease; resistant varieties are returning to NYC.",
+    leaves:'Oval with asymmetric base, doubly serrated; yellow in fall',
+    bark:'Gray with alternating light and dark diamond-shaped ridges',
+    seeds:'Flat, round, papery samaras with a notch at the tip',
+    hint:'Classic umbrella/vase silhouette; asymmetric leaf base',
+    fact:'Dutch elm disease killed 100+ million American elms after arriving in the 1920s. NYC is replanting resistant varieties.'},
+  'red maple':{emoji:'🍁',sci:'Acer rubrum',rank:15,
+    desc:'Earns its name year-round — red flower buds in winter, red flowers in early spring, red seeds, and blazing red fall foliage.',
+    leaves:'3–5 lobes with irregular teeth; pale undersides; brilliant red in fall',
+    bark:'Smooth gray on young trees; shaggy gray-brown plates when mature',
+    seeds:'Red-tinged paired samaras appearing in spring before full leaf-out',
+    hint:'Something red in every season: buds, flowers, seeds, or fall leaves',
+    fact:'Red maples are the most abundant native tree in eastern North America.'},
+  'tulip-tree':{emoji:'🌷',sci:'Liriodendron tulipifera',rank:16,
+    desc:'The tallest native eastern North American tree. Distinctive 4-lobed leaves and beautiful yellow-green tulip flowers.',
+    leaves:'Unique 4-lobed shape with a flat or notched top — unmistakable',
+    bark:'Gray-white with deep interlacing ridges on mature trees',
+    seeds:'Cone-like clusters of winged seeds that persist through winter',
+    hint:'4-lobed leaves with a flat top look like no other tree on Earth',
+    fact:'Native Americans hollowed out tulip-tree trunks for dugout canoes. George Washington planted 8 at Mount Vernon.'},
+  'ginkgo':{emoji:'🌬️',sci:'Ginkgo biloba',rank:6,
+    desc:'A living fossil unchanged for 200 million years.',
+    leaves:'Fan shape with central notch',bark:'Gray, deeply furrowed',seeds:'Foul-smelling fruits (female trees)',
+    hint:'Fan-shaped leaves are unique',fact:'Ginkgo trees survived the Hiroshima atomic bomb.'},
+  'swamp white oak':{emoji:'🌳',sci:'Quercus bicolor',rank:17,
+    desc:'Distinctive two-toned bark — peeling papery flakes on upper branches contrast with shaggy furrows on the lower trunk.',
+    leaves:'Widest in the middle, with rounded wavy lobes; pale below',
+    bark:'Upper branches: curling papery scales. Lower trunk: shaggy ridges',
+    seeds:'Acorns on long stalks (5–8 cm), usually in pairs',
+    hint:'Upper bark peels in curling papery flakes',
+    fact:'Swamp white oaks can live 300–500 years and support over 500 species of moth and butterfly caterpillars.'},
+  'norway spruce':{emoji:'🎄',sci:'Picea abies',rank:18,
+    desc:'Classic Christmas tree form with dramatically drooping branchlets and the largest cones of any spruce.',
+    leaves:'Short sharp dark-green needles (1–2.5 cm)',
+    bark:'Orange-brown, flaking in thin circular scales',
+    seeds:'Long cylindrical cones (10–20 cm) — largest of any spruce',
+    hint:'Branchlets hang in long dramatic curtains',
+    fact:'The Rockefeller Center Christmas Tree is often a Norway spruce. The oldest living clone is over 9,500 years old.'},
+  'crabapple':{emoji:'🍎',sci:'Malus spp.',rank:19,
+    desc:'Spring bloomers with masses of pink or white flowers. Tiny colorful fruit persists through winter, feeding birds.',
+    leaves:'Oval, serrated; often with red-purple tints',
+    bark:'Gray-brown, developing scales and small fissures',
+    seeds:'Tiny apples (<5 cm) turning red or yellow; persistent through winter',
+    hint:'Masses of pink/white spring flowers; tiny fruit hanging through winter',
+    fact:'Crabapple fruits are a critical winter food source for cedar waxwings, robins, and mockingbirds.'},
+  'kentucky coffeetree':{emoji:'☕',sci:'Gymnocladus dioicus',rank:20,
+    desc:'Enormous twice-compound leaves and chunky seed pods. Leafless for over 6 months — one of the last trees to leaf out.',
+    leaves:'Huge twice-compound leaves (60–90 cm) with many small oval leaflets',
+    bark:'Gray-brown with thick, curling, scaly ridges',
+    seeds:'Large thick leathery brown pods (15–25 cm) containing hard seeds',
+    hint:'Enormous leaves; tree looks completely bare for much of the year',
+    fact:'Kentucky coffeetree is leafless for over 6 months — last to leaf out in spring, first to drop in fall.'}
+};
+
+function getInfo(name){
+  if(!name) return null;
+  const k=name.toLowerCase().trim();
+  if(DB[k]) return DB[k];
+  for(const [dk,v] of Object.entries(DB)){
+    if(k.includes(dk)||dk.includes(k)) return v;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+const S={
+  loc:null, trees:[], nearest:null,
+  quizMode:false, quiz:null, quizAnswered:false,
+  score:{ok:0,tot:0,streak:0},
+  map:null, uMarker:null, uCircle:null, tMarkers:[],
+  watchId:null, lastFetch:null, loading:false,
+  tab:'map'
+};
+
+// ═══════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():''}
+function fdist(m){return m<1000?Math.round(m)+'m':+(m/1000).toFixed(1)+'km'}
+function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=0|Math.random()*(i+1);[b[i],b[j]]=[b[j],b[i]]}return b}
+let _tid;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(_tid);_tid=setTimeout(()=>el.classList.remove('show'),3000);
+}
+function hav(a,b,c,d){
+  const R=6371000,p1=a*Math.PI/180,p2=c*Math.PI/180,
+        dp=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,
+        x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+// ═══════════════════════════════════════════════════════
+// GEOLOCATION
+// ═══════════════════════════════════════════════════════
+function startGeo(){
+  if(!navigator.geolocation){setStatus('err','Geolocation not supported');return;}
+  S.watchId=navigator.geolocation.watchPosition(onPos,onErr,
+    {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+}
+function onPos(p){
+  const{latitude:la,longitude:lo,accuracy:ac}=p.coords;
+  S.loc={la,lo,ac};
+  setStatus('on',`±${Math.round(ac)} m`);
+  updateUserMap(la,lo,ac);
+  const moved=!S.lastFetch||hav(la,lo,S.lastFetch.la,S.lastFetch.lo)>80;
+  if(moved){fetchTrees(la,lo);S.lastFetch={la,lo};}
+  updateProx();
+  if(S.tab==='nearby')renderNearby();
+}
+function onErr(e){
+  const m={1:'Location denied — check browser settings.',2:'Location unavailable.',3:'Location timed out.'};
+  setStatus('err',m[e.code]||'Location error');
+}
+function setStatus(t,msg){
+  document.getElementById('sdot').className='sdot '+(t==='on'?'on':t==='err'?'err':'');
+  document.getElementById('slabel').textContent=msg;
+}
+
+// ═══════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════
+async function fetchTrees(la,lo){
+  if(S.loading)return;S.loading=true;
+  const d=0.003;
+  const sel='tree_id,spc_common,spc_latin,tree_dbh,health,status,address,zipcode,boroname,latitude,longitude,nta_name';
+  const where=`latitude between ${la-d} and ${la+d} AND longitude between ${lo-d} and ${lo+d} AND status='Alive'`;
+  const url=`https://data.cityofnewyork.us/resource/uvpi-gqnh.json?$where=${encodeURIComponent(where)}&$limit=200&$select=${sel}`;
+  try{
+    const r=await fetch(url);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    S.trees=data
+      .filter(t=>t.latitude&&t.longitude&&t.spc_common)
+      .map(t=>({...t,la:+t.latitude,lo:+t.longitude,dbh:+t.tree_dbh||0,
+        dist:hav(la,lo,+t.latitude,+t.longitude)}))
+      .sort((a,b)=>a.dist-b.dist);
+    renderMapMarkers();
+    updateProx();
+    if(S.tab==='nearby')renderNearby();
+    toast(`🌳 ${S.trees.length} trees found nearby`);
+  }catch(e){toast('Could not load tree data');console.error(e);}
+  S.loading=false;
+}
+
+// ═══════════════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════════════
+function initMap(){
+  S.map=L.map('map',{zoomControl:false,attributionControl:true})
+    .setView([40.7128,-74.0060],16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://openstreetmap.org">OSM</a> | Trees: <a href="https://data.cityofnewyork.us/resource/uvpi-gqnh">NYC Open Data</a>',
+    maxZoom:20
+  }).addTo(S.map);
+  L.control.zoom({position:'bottomright'}).addTo(S.map);
+  document.getElementById('center-btn').onclick=()=>{
+    if(S.loc)S.map.setView([S.loc.la,S.loc.lo],18);
+  };
+}
+function updateUserMap(la,lo,ac){
+  if(!S.map)return;
+  const icon=L.divIcon({html:'<div style="width:15px;height:15px;background:#1565c0;border:2.5px solid #fff;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.4)"></div>',className:'',iconSize:[15,15],iconAnchor:[7.5,7.5]});
+  if(!S.uMarker){
+    S.uMarker=L.marker([la,lo],{icon,zIndexOffset:999}).addTo(S.map);
+    S.uCircle=L.circle([la,lo],{radius:ac,color:'#1565c0',fillColor:'#1565c0',fillOpacity:.08,weight:1}).addTo(S.map);
+    S.map.setView([la,lo],17);
+  }else{
+    S.uMarker.setLatLng([la,lo]);
+    S.uCircle.setLatLng([la,lo]).setRadius(ac);
+  }
+}
+function renderMapMarkers(){
+  S.tMarkers.forEach(m=>S.map.removeLayer(m));S.tMarkers=[];
+  const hc={'Good':'#43a047','Fair':'#fb8c00','Poor':'#e53935'};
+  S.trees.forEach((t,i)=>{
+    const c=hc[t.health]||'#607d8b';
+    const s=t.dbh>20?13:t.dbh>10?10:7;
+    const icon=L.divIcon({html:`<div style="width:${s}px;height:${s}px;background:${c};border:2px solid rgba(255,255,255,.8);border-radius:50%;cursor:pointer;opacity:.85"></div>`,className:'',iconSize:[s,s],iconAnchor:[s/2,s/2]});
+    const m=L.marker([t.la,t.lo],{icon}).addTo(S.map).on('click',()=>openModalFor(t));
+    S.tMarkers.push(m);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// PROXIMITY
+// ═══════════════════════════════════════════════════════
+let _lastNearestId=null;
+function updateProx(){
+  if(!S.loc||!S.trees.length)return;
+  const{la,lo}=S.loc;
+  S.trees.forEach(t=>t.dist=hav(la,lo,t.la,t.lo));
+  S.trees.sort((a,b)=>a.dist-b.dist);
+  const n=S.trees[0];
+  S.nearest=n;
+  if(n&&n.dist<=40){
+    showProxCard(n);
+    if(S.quizMode&&n.tree_id!==_lastNearestId){
+      _lastNearestId=n.tree_id;
+      buildQuiz(n);
+      go('quiz');
+    }
+  }else{
+    document.getElementById('prox-card').style.display='none';
+  }
+}
+function showProxCard(t){
+  const si=getInfo(t.spc_common);
+  document.getElementById('pc-icon').textContent=si?si.emoji:'🌳';
+  document.getElementById('pc-name').textContent=cap(t.spc_common);
+  document.getElementById('pc-dist').textContent=`${Math.round(t.dist)} m away · ${t.address||''}`;
+  const hk=(t.health||'').toLowerCase();
+  document.getElementById('pc-chips').innerHTML=`
+    <span class="chip ${hk}">${t.health||'Unknown'}</span>
+    <span class="chip">${t.dbh}" trunk</span>
+    ${t.nta_name?`<span class="chip">${t.nta_name}</span>`:''}
+  `;
+  document.getElementById('prox-card').style.display='block';
+}
+
+// ═══════════════════════════════════════════════════════
+// NEARBY LIST
+// ═══════════════════════════════════════════════════════
+function renderNearby(){
+  const el=document.getElementById('tlist');
+  const sub=document.getElementById('nearby-sub');
+  if(!S.loc){el.innerHTML='<div class="empty"><div class="big">📍</div><p>Enable location to see trees near you.</p></div>';return;}
+  if(S.loading){el.innerHTML='<div class="spinner"></div>';return;}
+  if(!S.trees.length){el.innerHTML='<div class="empty"><div class="big">🌳</div><p>No trees found nearby.</p></div>';return;}
+  sub.textContent=`${S.trees.length} trees within ~300 m`;
+  el.innerHTML=S.trees.slice(0,40).map((t,i)=>{
+    const si=getInfo(t.spc_common);
+    const hk=(t.health||'').toLowerCase();
+    return `<div class="tc" onclick="openModalFor(S.trees[${i}])">
+      <div class="tc-head">
+        <div class="tc-ico">${si?si.emoji:'🌳'}</div>
+        <div><div class="tc-name">${cap(t.spc_common)}</div><div class="tc-sci">${si?si.sci:(t.spc_latin||'')}</div></div>
+        <div class="tc-dist">${fdist(t.dist)}</div>
+      </div>
+      <div class="tc-chips">
+        <span class="chip ${hk}">${t.health||'Unknown'}</span>
+        <span class="chip">${t.dbh}" trunk</span>
+        ${t.address?`<span class="chip">${t.address}</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════════════════════
+function openModal(){openModalFor(S.nearest);}
+function openModalFor(t){
+  if(!t)return;
+  const si=getInfo(t.spc_common);
+  const dbh=t.dbh||0;
+  const sw=Math.round(dbh*2.5),co=Math.round(dbh*1.8),aq=Math.round(dbh*0.4);
+  document.getElementById('mcontent').innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div style="font-size:3rem">${si?si.emoji:'🌳'}</div>
+      <div><div class="mtitle">${cap(t.spc_common)}</div>
+      <div class="mlatin">${si?si.sci:(t.spc_latin||'Species unknown')}</div></div>
+    </div>
+    ${si?`<div style="font-size:.83rem;color:var(--muted);line-height:1.55;margin-bottom:14px">${si.desc}</div>`:''}
+    <div class="msec"><div class="msec-t">Tree Stats</div>
+      <div class="mgrid">
+        <div class="mcell"><div class="mcell-l">Trunk diameter</div><div class="mcell-v">${dbh}" · ${Math.round(dbh*2.54)} cm</div></div>
+        <div class="mcell"><div class="mcell-l">Health</div><div class="mcell-v">${t.health||'Unknown'}</div></div>
+        <div class="mcell"><div class="mcell-l">Address</div><div class="mcell-v" style="font-size:.8rem">${t.address||'Unknown'}</div></div>
+        <div class="mcell"><div class="mcell-l">Neighborhood</div><div class="mcell-v" style="font-size:.8rem">${t.nta_name||t.boroname||'NYC'}</div></div>
+      </div>
+    </div>
+    <div class="msec"><div class="msec-t">Annual Ecological Benefits (estimated)</div>
+      <div class="eco-list">
+        <div class="eco-item">💧 <b>${sw} gallons</b> stormwater intercepted</div>
+        <div class="eco-item">🌍 <b>${co} lbs</b> CO₂ absorbed</div>
+        <div class="eco-item">💨 <b>${aq} oz</b> air pollutants removed</div>
+      </div>
+    </div>
+    ${si?`<div class="msec"><div class="msec-t">How to Identify</div>
+      <div class="mid-list">
+        <div>🍃 <b>Leaves:</b> ${si.leaves}</div>
+        <div>🪵 <b>Bark:</b> ${si.bark}</div>
+        <div>🌰 <b>Seeds/Fruit:</b> ${si.seeds}</div>
+      </div>
+      <div class="mfact">💡 ${si.fact}</div>
+    </div>`:''}
+    <button class="mclose" onclick="closeModal()">Close</button>
+  `;
+  document.getElementById('moverlay').classList.add('show');
+}
+function closeModal(){document.getElementById('moverlay').classList.remove('show');}
+
+// ═══════════════════════════════════════════════════════
+// QUIZ ENGINE
+// ═══════════════════════════════════════════════════════
+function quizNearest(){if(S.nearest)buildQuiz(S.nearest);}
+function buildQuiz(t){
+  const correct=t.spc_common.toLowerCase();
+  const nearbySpecies=[...new Set(S.trees.filter(x=>x.spc_common&&x.spc_common.toLowerCase()!==correct).map(x=>x.spc_common.toLowerCase()))];
+  const dbSpecies=Object.keys(DB).filter(k=>k!==correct&&!nearbySpecies.includes(k));
+  const pool=[...nearbySpecies,...dbSpecies];
+  const wrongs=shuffle(pool).slice(0,3);
+  const opts=shuffle([correct,...wrongs]);
+  S.quiz={t,correct,opts};
+  S.quizAnswered=false;
+  renderQuiz();
+  if(S.tab==='quiz')return;
+}
+function renderQuiz(){
+  if(!S.quiz){return;}
+  const{t,correct,opts}=S.quiz;
+  const si=getInfo(t.spc_common);
+  const dbh=t.dbh||0;
+  const sz=dbh<6?'small (young sapling)':dbh<14?'medium-sized':dbh<24?'large':'very large, old-growth';
+  const clues=[
+    `📍 ${t.nta_name||t.boroname||'New York City'}`,
+    `📏 Trunk: ${dbh}" across — ${sz}`,
+    `💚 Health: ${t.health||'Unknown'}`,
+    t.address?`🏠 Located at: ${t.address}`:null,
+    si?`👁️ Hint: ${si.hint}`:null
+  ].filter(Boolean);
+  document.getElementById('quiz-body').innerHTML=`
+    <div class="qcard">
+      <div class="qprompt">🔍 What tree are you standing near?</div>
+      <div class="qclues">${clues.map(c=>`<div class="qclue">${c}</div>`).join('')}</div>
+      <div class="qopts" id="qopts">
+        ${opts.map((o,i)=>`<button class="qopt" data-i="${i}" data-ans="${o}">${cap(o)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="qresult" id="qresult"></div>
+  `;
+  document.getElementById('qopts').addEventListener('click',e=>{
+    const btn=e.target.closest('.qopt');
+    if(!btn||S.quizAnswered)return;
+    S.quizAnswered=true;
+    doAnswer(btn.dataset.ans);
+  });
+}
+function doAnswer(ans){
+  const{correct,t}=S.quiz;
+  const ok=ans===correct;
+  document.querySelectorAll('.qopt').forEach(b=>{
+    b.disabled=true;
+    if(b.dataset.ans===correct)b.classList.add('cor');
+    else if(b.dataset.ans===ans&&!ok)b.classList.add('wrg');
+  });
+  S.score.tot++;
+  if(ok){S.score.ok++;S.score.streak++;toast('Correct! 🎉');}
+  else{S.score.streak=0;toast(`It's a ${cap(correct)}`);}
+  updateScore();
+  const si=getInfo(correct);
+  const res=document.getElementById('qresult');
+  res.classList.add('show');
+  res.innerHTML=`
+    <div class="qr-hd" style="color:${ok?'#2e7d32':'#c62828'}">${ok?'🎉 Correct!':'❌ Not quite…'}</div>
+    <div class="qr-sp">${cap(correct)}</div>
+    ${si?`<div class="qr-desc">${si.desc}</div><div class="qr-fact">💡 ${si.fact}</div>`:''}
+    <div class="qr-btns">
+      <button class="btn btn-p" style="flex:2" onclick="openModalFor(S.quiz.t)">Full Info</button>
+      <button class="btn btn-s" style="flex:1" onclick="clearQuiz()">Done</button>
+    </div>
+  `;
+}
+function clearQuiz(){
+  S.quiz=null;
+  document.getElementById('quiz-body').innerHTML='<div class="empty"><div class="big">🌳</div><p>Walk to a new tree for the next quiz!</p></div>';
+}
+function updateScore(){
+  document.getElementById('sc-score').textContent=`${S.score.ok} / ${S.score.tot}`;
+  const st=S.score.streak;
+  document.getElementById('sc-streak').textContent=st>=5?`🔥 ${st}`:st>=3?`⚡ ${st}`:`🌱 ${st}`;
+}
+
+// ═══════════════════════════════════════════════════════
+// SPECIES GUIDE
+// ═══════════════════════════════════════════════════════
+function renderSpecies(){
+  const entries=Object.entries(DB).filter(([k])=>k!=='ginkgo'||DB[k].rank===6); // dedupe
+  entries.sort((a,b)=>a[1].rank-b[1].rank);
+  document.getElementById('slist').innerHTML=entries.map(([k,si])=>`
+    <div class="scard">
+      <div class="scard-hd" onclick="this.nextElementSibling.classList.toggle('open')">
+        <div class="scard-ico">${si.emoji}</div>
+        <div><div class="scard-name">${cap(k)}</div><div class="scard-sci">${si.sci}</div></div>
+        <div class="scard-rank">#${si.rank}<br>in NYC</div>
+      </div>
+      <div class="scard-body">
+        <div class="srow"><span class="srow-ico">📖</span><span>${si.desc}</span></div>
+        <div class="srow"><span class="srow-ico">🍃</span><span><b>Leaves:</b> ${si.leaves}</span></div>
+        <div class="srow"><span class="srow-ico">🪵</span><span><b>Bark:</b> ${si.bark}</span></div>
+        <div class="srow"><span class="srow-ico">🌰</span><span><b>Seeds:</b> ${si.seeds}</span></div>
+        <div class="sfact">💡 ${si.fact}</div>
+        <button class="sqbtn" onclick="mockQuiz('${k.replace(/'/g,"\\'")}')">Quiz on this tree →</button>
+      </div>
+    </div>
+  `).join('');
+}
+function mockQuiz(k){
+  const si=DB[k];if(!si)return;
+  const t={spc_common:k,spc_latin:si.sci,dbh:String(5+Math.random()*20|0),
+    health:['Good','Fair'][Math.random()>.3?0:1],nta_name:'NYC Street',address:'Practice Quiz',dist:5};
+  buildQuiz(t);go('quiz');
+}
+
+// ═══════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════
+function go(tab){
+  S.tab=tab;
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  document.getElementById(tab+'-view').classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab==='map'&&S.map)setTimeout(()=>S.map.invalidateSize(),50);
+  if(tab==='nearby')renderNearby();
+  if(tab==='quiz'&&S.quiz)renderQuiz();
+}
+
+// ═══════════════════════════════════════════════════════
+// QUIZ TOGGLE
+// ═══════════════════════════════════════════════════════
+document.getElementById('quiz-toggle').onchange=function(){
+  S.quizMode=this.checked;
+  toast(S.quizMode?'🎯 Quiz mode on — walk near a tree!':'Quiz mode off');
+};
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded',()=>{
+  initMap();
+  renderSpecies();
+  startGeo();
+});
+</script>
+</body>
+</html>
