@@ -170,7 +170,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 .tree-dot{border-radius:50%;border:2.5px solid rgba(255,255,255,.9);cursor:pointer;animation:treePulse 2.5s ease-in-out infinite}
 
 /* ── IDENTIFY TAB ── */
-#identify-view{padding:14px;display:flex;flex-direction:column;gap:12px}
+#identify-view{padding:14px;flex-direction:column;gap:12px}
+#identify-view.active{display:flex}
 .cam-area{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--border)}
 #id-preview{width:100%;display:none;max-height:260px;object-fit:cover}
 .cam-ph{padding:32px 20px;text-align:center;color:var(--muted);font-size:.88rem;line-height:1.6}
