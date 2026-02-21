@@ -293,8 +293,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
     <div id="id-results"></div>
     <div style="text-align:center"><button onclick="document.querySelector('.id-key-box').style.display='block'" style="background:none;border:none;color:var(--muted);font-size:.75rem;cursor:pointer;padding:2px 0">🔑 Change API key</button></div>
     <div class="id-key-box">
-      <b>Pl@ntNet API Key</b>
-      <p>Free at <a href="https://my.plantnet.org" target="_blank" style="color:var(--gm)">my.plantnet.org</a> — 500 identifications/day. Enter once, saved to your device.</p>
+      <b>Anthropic API Key</b>
+      <p>Get a free key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--gm)">console.anthropic.com</a> → API Keys. Enter once, saved to your device.</p>
       <div class="id-key-row">
         <input id="id-key-inp" type="text" placeholder="Paste API key here">
         <button onclick="saveKey()">Save</button>
@@ -887,8 +887,8 @@ function onIdFile(input){
 
 function saveKey(){
   const val=document.getElementById('id-key-inp').value.trim();
-  if(!val){toast('Please paste your Pl@ntNet API key first');return;}
-  localStorage.setItem('plantnet_key',val);
+  if(!val){toast('Please paste your Anthropic API key first');return;}
+  localStorage.setItem('claude_key',val);
   const st=document.getElementById('id-key-status');
   st.textContent='Key saved ✓';
   st.className='ok';
@@ -896,56 +896,90 @@ function saveKey(){
   setTimeout(()=>{document.querySelector('.id-key-box').style.display='none';},800);
 }
 
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const base64=reader.result.split(',')[1];
+      const mediaType=file.type||'image/jpeg';
+      resolve({base64,mediaType});
+    };
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function extractJSON(text){
+  try{return JSON.parse(text);}catch(_){}
+  const m=text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if(m)try{return JSON.parse(m[1]);}catch(_){}
+  const o=text.match(/\{[\s\S]*\}/);
+  if(o)try{return JSON.parse(o[0]);}catch(_){}
+  return null;
+}
+
 async function identifyTree(file){
-  const key=localStorage.getItem('plantnet_key');
+  const key=localStorage.getItem('claude_key');
   if(!key){
-    toast('Add your Pl@ntNet API key below first');
+    toast('Add your Anthropic API key below first');
+    document.querySelector('.id-key-box').style.display='block';
     return;
   }
   const resultsEl=document.getElementById('id-results');
   resultsEl.style.display='block';
   resultsEl.innerHTML='<div class="spinner"></div>';
 
-  const form=new FormData();
-  form.append('images',file);
-  form.append('organs','auto');
-
   try{
-    const r=await fetch(
-      `https://my-api.plantnet.org/v2/identify/all?api-key=${encodeURIComponent(key)}&lang=en&include-related-images=false`,
-      {method:'POST',body:form}
-    );
+    const{base64,mediaType}=await fileToBase64(file);
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'x-api-key':key,
+        'anthropic-version':'2023-06-01',
+        'content-type':'application/json',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:1024,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+            {type:'text',text:'You are a botanist. Identify the tree in this photo. Reply with JSON only, no markdown:\n{"results":[{"common":"common name","scientific":"scientific name","confidence":85,"features":"key visible features in this photo"}],"tip":"one helpful identification tip"}\nGive 1–3 results ordered by confidence (0–100). If no tree is visible, return {"error":"no tree visible"}.'}
+          ]
+        }]
+      })
+    });
     if(!r.ok){
-      const errText=await r.text().catch(()=>'');
       let msg='Identification failed';
-      if(r.status===401||r.status===403){msg='Invalid API key — update it below';document.querySelector('.id-key-box').style.display='block';}
-      else if(r.status===429)msg='Daily limit reached (500/day) — try again tomorrow';
-      else if(errText)try{msg=JSON.parse(errText).message||msg;}catch(_){}
+      if(r.status===401){msg='Invalid API key — update it below';document.querySelector('.id-key-box').style.display='block';}
+      else if(r.status===429)msg='Rate limit reached — try again in a moment';
+      else if(r.status===400)msg='Image could not be processed — try a different photo';
       resultsEl.innerHTML=`<div class="cam-ph"><div class="cam-ph-icon">⚠️</div><div>${msg}</div></div>`;
       return;
     }
     const data=await r.json();
-    showIdResults(data);
+    const parsed=extractJSON(data.content[0].text);
+    if(!parsed){resultsEl.innerHTML='<div class="cam-ph"><div class="cam-ph-icon">🌿</div><div>Could not parse result — try again.</div></div>';return;}
+    showIdResults(parsed);
   }catch(e){
     resultsEl.innerHTML='<div class="cam-ph"><div class="cam-ph-icon">📡</div><div>Network error — check your connection and try again.</div></div>';
+    console.error(e);
   }
 }
 
 function showIdResults(data){
   const resultsEl=document.getElementById('id-results');
-  const results=(data&&data.results)||[];
-  if(!results.length){
+  if(data.error||!data.results||!data.results.length){
     resultsEl.innerHTML='<div class="cam-ph"><div class="cam-ph-icon">🌿</div><div>Could not identify — try a clearer photo of a leaf, bark, or fruit.</div></div>';
     return;
   }
-  const top=results.slice(0,3);
   let html='<div class="id-results-hd">Top matches</div>';
-  top.forEach(item=>{
-    const score=item.score||0;
-    const pct=Math.round(score*100);
-    const sci=(item.species&&item.species.scientificNameWithoutAuthor)||'Unknown';
-    const commonNames=(item.species&&item.species.commonNames)||[];
-    const common=commonNames[0]||sci;
+  data.results.forEach(item=>{
+    const pct=Math.round(item.confidence||0);
+    const common=item.common||'Unknown';
+    const sci=item.scientific||'';
     const commonCap=common.charAt(0).toUpperCase()+common.slice(1);
     const inGuide=getInfo(common)||getInfo(sci.split(' ').slice(0,2).join(' '));
     const clickable=inGuide?'clickable':'';
@@ -956,11 +990,13 @@ function showIdResults(data){
         <div class="id-ri-common">${commonCap}</div>
         <div class="id-ri-sci">${sci}</div>
         ${badge}
+        ${item.features?`<div style="font-size:.72rem;color:var(--muted);margin-top:3px;line-height:1.4">${item.features}</div>`:''}
         <div class="id-ri-bar-wrap"><div class="id-ri-bar" style="width:${pct}%"></div></div>
       </div>
       <div class="id-ri-pct">${pct}%</div>
     </div>`;
   });
+  if(data.tip)html+=`<div style="padding:10px 14px;font-size:.76rem;color:var(--muted);font-style:italic;border-top:1px solid var(--border)">💡 ${data.tip}</div>`;
   resultsEl.innerHTML=html;
   resultsEl.style.display='block';
 }
@@ -984,7 +1020,7 @@ function idResultClick(el){
 }
 
 function initIdentify(){
-  const saved=localStorage.getItem('plantnet_key');
+  const saved=localStorage.getItem('claude_key');
   if(saved){
     document.getElementById('id-key-inp').value=saved;
     const st=document.getElementById('id-key-status');
