@@ -489,11 +489,11 @@ function getInfo(name){
 // STATE
 // ═══════════════════════════════════════════════════════
 const S={
-  loc:null, trees:[], nearest:null,
+  loc:null, trees:[], viewTrees:[], nearest:null,
   quizMode:false, quiz:null, quizAnswered:false,
   score:{ok:0,tot:0,streak:0},
-  map:null, uMarker:null, uCircle:null, tMarkers:[],
-  watchId:null, lastFetch:null, loading:false,
+  map:null, uMarker:null, tMarkers:[],
+  watchId:null, lastFetch:null, loading:false, viewFetching:false,
   tab:'map', follow:true
 };
 
@@ -528,7 +528,7 @@ function onPos(p){
   const{latitude:la,longitude:lo,accuracy:ac}=p.coords;
   S.loc={la,lo,ac};
   setStatus('on',`±${Math.round(ac)} m`);
-  updateUserMap(la,lo,ac);
+  updateUserMap(la,lo);
   const moved=!S.lastFetch||hav(la,lo,S.lastFetch.la,S.lastFetch.lo)>80;
   if(moved){fetchTrees(la,lo);S.lastFetch={la,lo};}
   updateProx();
@@ -548,10 +548,10 @@ function setStatus(t,msg){
 // ═══════════════════════════════════════════════════════
 async function fetchTrees(la,lo){
   if(S.loading)return;S.loading=true;
-  const d=0.003;
+  const d=0.004;
   const sel='tree_id,spc_common,spc_latin,tree_dbh,health,status,address,zipcode,boroname,latitude,longitude,nta_name';
   const where=`latitude between ${la-d} and ${la+d} AND longitude between ${lo-d} and ${lo+d} AND status='Alive'`;
-  const url=`https://data.cityofnewyork.us/resource/uvpi-gqnh.json?$where=${encodeURIComponent(where)}&$limit=200&$select=${sel}`;
+  const url=`https://data.cityofnewyork.us/resource/uvpi-gqnh.json?$where=${encodeURIComponent(where)}&$limit=400&$select=${sel}`;
   try{
     const r=await fetch(url);
     if(!r.ok)throw new Error('HTTP '+r.status);
@@ -561,12 +561,33 @@ async function fetchTrees(la,lo){
       .map(t=>({...t,la:+t.latitude,lo:+t.longitude,dbh:+t.tree_dbh||0,
         dist:hav(la,lo,+t.latitude,+t.longitude)}))
       .sort((a,b)=>a.dist-b.dist);
-    renderMapMarkers();
     updateProx();
     if(S.tab==='nearby')renderNearby();
-    toast(`🌳 ${S.trees.length} trees found nearby`);
-  }catch(e){toast('Could not load tree data');console.error(e);}
+  }catch(e){console.error(e);}
   S.loading=false;
+}
+
+let _viewTimer;
+async function fetchTreesForView(){
+  if(!S.map||S.viewFetching)return;
+  const zoom=S.map.getZoom();
+  if(zoom<14){S.tMarkers.forEach(({m})=>S.map.removeLayer(m));S.tMarkers=[];return;}
+  S.viewFetching=true;
+  const b=S.map.getBounds(),sw=b.getSouthWest(),ne=b.getNorthEast();
+  const sel='tree_id,spc_common,spc_latin,tree_dbh,health,status,address,zipcode,boroname,latitude,longitude,nta_name';
+  const where=`latitude between ${sw.lat} and ${ne.lat} AND longitude between ${sw.lng} and ${ne.lng} AND status='Alive'`;
+  const url=`https://data.cityofnewyork.us/resource/uvpi-gqnh.json?$where=${encodeURIComponent(where)}&$limit=500&$select=${sel}`;
+  try{
+    const r=await fetch(url);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    S.viewTrees=data
+      .filter(t=>t.latitude&&t.longitude&&t.spc_common)
+      .map(t=>({...t,la:+t.latitude,lo:+t.longitude,dbh:+t.tree_dbh||0,
+        dist:S.loc?hav(S.loc.la,S.loc.lo,+t.latitude,+t.longitude):0}));
+    renderMapMarkers();
+  }catch(e){console.error(e);}
+  S.viewFetching=false;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -575,34 +596,36 @@ async function fetchTrees(la,lo){
 function initMap(){
   S.map=L.map('map',{zoomControl:false,attributionControl:true})
     .setView([40.7128,-74.0060],16);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png',{
     attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a> contributors © <a href="https://carto.com">CARTO</a> | <a href="https://data.cityofnewyork.us">NYC Open Data</a>',
     maxZoom:20,subdomains:'abcd'
   }).addTo(S.map);
   L.control.zoom({position:'bottomright'}).addTo(S.map);
   S.map.on('dragstart',()=>{S.follow=false;});
+  S.map.on('moveend',()=>{
+    clearTimeout(_viewTimer);
+    _viewTimer=setTimeout(fetchTreesForView,400);
+  });
   document.getElementById('center-btn').onclick=()=>{
     if(S.loc){S.follow=true;S.map.setView([S.loc.la,S.loc.lo],18);}
   };
 }
-function updateUserMap(la,lo,ac){
+function updateUserMap(la,lo){
   if(!S.map)return;
   const icon=L.divIcon({html:'<div style="width:15px;height:15px;background:#1565c0;border:2.5px solid #fff;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,.4)"></div>',className:'',iconSize:[15,15],iconAnchor:[7.5,7.5]});
   if(!S.uMarker){
     S.uMarker=L.marker([la,lo],{icon,zIndexOffset:999}).addTo(S.map);
-    S.uCircle=L.circle([la,lo],{radius:ac,color:'#1565c0',fillColor:'#1565c0',fillOpacity:.08,weight:1}).addTo(S.map);
     S.map.setView([la,lo],17);
     S.follow=true;
   }else{
     S.uMarker.setLatLng([la,lo]);
-    S.uCircle.setLatLng([la,lo]).setRadius(ac);
     if(S.follow)S.map.panTo([la,lo],{animate:true,duration:0.5});
   }
 }
 function renderMapMarkers(){
   S.tMarkers.forEach(({m})=>S.map.removeLayer(m));S.tMarkers=[];
   const hc={'Good':'#43a047','Fair':'#fb8c00','Poor':'#e53935'};
-  S.trees.forEach((t,i)=>{
+  S.viewTrees.forEach((t,i)=>{
     const c=hc[t.health]||'#607d8b';
     const s=t.dbh>20?13:t.dbh>10?10:7;
     const icon=L.divIcon({html:`<div class="tree-dot" style="width:${s}px;height:${s}px;background:${c}"></div>`,className:'',iconSize:[s,s],iconAnchor:[s/2,s/2]});
@@ -612,6 +635,7 @@ function renderMapMarkers(){
     });
     S.tMarkers.push({m,id:t.tree_id});
   });
+  if(S.nearest)updatePulseMarker(S.nearest.tree_id);
 }
 function updatePulseMarker(treeId){
   S.tMarkers.forEach(({m,id})=>{
