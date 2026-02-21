@@ -168,6 +168,37 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
 /* ── PULSING TREE DOTS ── */
 @keyframes treePulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.8)}70%{box-shadow:0 0 0 7px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
 .tree-dot{border-radius:50%;border:2.5px solid rgba(255,255,255,.9);cursor:pointer;animation:treePulse 2.5s ease-in-out infinite}
+
+/* ── IDENTIFY TAB ── */
+#identify-view{padding:14px;display:flex;flex-direction:column;gap:12px}
+.cam-area{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--border)}
+#id-preview{width:100%;display:none;max-height:260px;object-fit:cover}
+.cam-ph{padding:32px 20px;text-align:center;color:var(--muted);font-size:.88rem;line-height:1.6}
+.cam-ph .cam-ph-icon{font-size:2.8rem;margin-bottom:8px}
+.id-snap{width:100%;padding:14px;background:var(--gm);color:#fff;border:none;font-size:.9rem;font-weight:600;cursor:pointer;letter-spacing:.2px}
+.id-snap:active{background:var(--gd)}
+#id-results{display:none;background:#fff;border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden}
+#id-results .id-results-hd{padding:12px 14px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);border-bottom:1px solid var(--border)}
+.id-result-item{padding:11px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.id-result-item:last-child{border-bottom:none}
+.id-result-item.clickable{cursor:pointer}
+.id-result-item.clickable:active{background:var(--gp)}
+.id-ri-info{flex:1;min-width:0}
+.id-ri-common{font-size:.9rem;font-weight:600;color:var(--gd);text-transform:capitalize}
+.id-ri-sci{font-size:.72rem;color:var(--muted);font-style:italic;margin-top:1px}
+.id-ri-bar-wrap{margin-top:5px;height:5px;background:var(--gp);border-radius:3px;overflow:hidden}
+.id-ri-bar{height:100%;background:var(--gm);border-radius:3px;transition:width .5s ease}
+.id-ri-pct{font-size:.78rem;font-weight:600;color:var(--gm);white-space:nowrap;flex-shrink:0}
+.id-guide-badge{font-size:.65rem;background:var(--gm);color:#fff;border-radius:10px;padding:2px 7px;margin-top:4px;display:inline-block}
+.id-key-box{background:#fff;border-radius:var(--r);box-shadow:var(--shadow);border:1px solid var(--border);padding:14px}
+.id-key-box b{font-size:.88rem;color:var(--gd)}
+.id-key-box p{font-size:.76rem;color:var(--muted);margin:5px 0 10px;line-height:1.5}
+.id-key-row{display:flex;gap:8px}
+.id-key-row input{flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:9px;font-size:.83rem;color:var(--text);background:#fafafa}
+.id-key-row input:focus{outline:none;border-color:var(--gl)}
+.id-key-row button{padding:9px 14px;background:var(--gm);color:#fff;border:none;border-radius:9px;font-size:.83rem;font-weight:600;cursor:pointer;flex-shrink:0}
+#id-key-status{font-size:.76rem;margin-top:7px;color:var(--muted)}
+#id-key-status.ok{color:#2e7d32}
 </style>
 </head>
 <body>
@@ -245,6 +276,29 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
     <div id="slist"></div>
   </div>
 
+  <!-- IDENTIFY -->
+  <div id="identify-view" class="view">
+    <div class="cam-area">
+      <img id="id-preview" alt="Tree photo">
+      <div id="id-ph" class="cam-ph">
+        <div class="cam-ph-icon">📷</div>
+        <div>Point your camera at any tree leaf, bark, or fruit<br>and we'll identify the species worldwide.</div>
+      </div>
+      <input type="file" id="id-file" accept="image/*" capture="environment" style="display:none" onchange="onIdFile(this)">
+      <button class="id-snap" onclick="document.getElementById('id-file').click()">📷 Take Photo / Choose Image</button>
+    </div>
+    <div id="id-results"></div>
+    <div class="id-key-box">
+      <b>Pl@ntNet API Key</b>
+      <p>Free at <a href="https://my.plantnet.org" target="_blank" style="color:var(--gm)">my.plantnet.org</a> — 500 identifications/day. Enter once, saved to your device.</p>
+      <div class="id-key-row">
+        <input id="id-key-inp" type="text" placeholder="Paste API key here">
+        <button onclick="saveKey()">Save</button>
+      </div>
+      <div id="id-key-status"></div>
+    </div>
+  </div>
+
 </div><!-- /content -->
 
 <!-- NAV -->
@@ -252,7 +306,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
   <button class="nb active" id="tab-map"     onclick="go('map')"><span class="ni">🗺️</span>Map</button>
   <button class="nb"         id="tab-nearby"  onclick="go('nearby')"><span class="ni">🌳</span>Nearby</button>
   <button class="nb"         id="tab-quiz"    onclick="go('quiz')"><span class="ni">🎯</span>Quiz</button>
-  <button class="nb"         id="tab-species" onclick="go('species')"><span class="ni">📚</span>Species</button>
+  <button class="nb"         id="tab-species"  onclick="go('species')"><span class="ni">📚</span>Species</button>
+  <button class="nb"         id="tab-identify" onclick="go('identify')"><span class="ni">📷</span>Identify</button>
 </nav>
 
 </div><!-- /app -->
@@ -798,6 +853,129 @@ function mockQuiz(k){
 }
 
 // ═══════════════════════════════════════════════════════
+// IDENTIFY (Pl@ntNet)
+// ═══════════════════════════════════════════════════════
+function onIdFile(input){
+  const file=input.files&&input.files[0];
+  if(!file)return;
+  const url=URL.createObjectURL(file);
+  const preview=document.getElementById('id-preview');
+  preview.src=url;
+  preview.style.display='block';
+  document.getElementById('id-ph').style.display='none';
+  identifyTree(file);
+  // reset so same file can be chosen again
+  input.value='';
+}
+
+function saveKey(){
+  const val=document.getElementById('id-key-inp').value.trim();
+  if(!val){toast('Please paste your Pl@ntNet API key first');return;}
+  localStorage.setItem('plantnet_key',val);
+  const st=document.getElementById('id-key-status');
+  st.textContent='Key saved ✓';
+  st.className='ok';
+  toast('API key saved ✓');
+}
+
+async function identifyTree(file){
+  const key=localStorage.getItem('plantnet_key');
+  if(!key){
+    toast('Add your Pl@ntNet API key below first');
+    return;
+  }
+  const resultsEl=document.getElementById('id-results');
+  resultsEl.style.display='block';
+  resultsEl.innerHTML='<div class="spinner"></div>';
+
+  const form=new FormData();
+  form.append('images',file);
+  form.append('organs','auto');
+
+  try{
+    const r=await fetch(
+      `https://my-api.plantnet.org/v2/identify/all?api-key=${encodeURIComponent(key)}&lang=en&include-related-images=false`,
+      {method:'POST',body:form}
+    );
+    if(!r.ok){
+      const errText=await r.text().catch(()=>'');
+      let msg='Identification failed';
+      if(r.status===401||r.status===403)msg='Invalid API key — check your key below';
+      else if(r.status===429)msg='Daily limit reached (500/day) — try again tomorrow';
+      else if(errText)try{msg=JSON.parse(errText).message||msg;}catch(_){}
+      resultsEl.innerHTML=`<div class="cam-ph"><div class="cam-ph-icon">⚠️</div><div>${msg}</div></div>`;
+      return;
+    }
+    const data=await r.json();
+    showIdResults(data);
+  }catch(e){
+    resultsEl.innerHTML='<div class="cam-ph"><div class="cam-ph-icon">📡</div><div>Network error — check your connection and try again.</div></div>';
+  }
+}
+
+function showIdResults(data){
+  const resultsEl=document.getElementById('id-results');
+  const results=(data&&data.results)||[];
+  if(!results.length){
+    resultsEl.innerHTML='<div class="cam-ph"><div class="cam-ph-icon">🌿</div><div>Could not identify — try a clearer photo of a leaf, bark, or fruit.</div></div>';
+    return;
+  }
+  const top=results.slice(0,3);
+  let html='<div class="id-results-hd">Top matches</div>';
+  top.forEach(item=>{
+    const score=item.score||0;
+    const pct=Math.round(score*100);
+    const sci=(item.species&&item.species.scientificNameWithoutAuthor)||'Unknown';
+    const commonNames=(item.species&&item.species.commonNames)||[];
+    const common=commonNames[0]||sci;
+    const commonCap=common.charAt(0).toUpperCase()+common.slice(1);
+    const inGuide=getInfo(common)||getInfo(sci.split(' ').slice(0,2).join(' '));
+    const clickable=inGuide?'clickable':'';
+    const badge=inGuide?'<span class="id-guide-badge">In our guide ✓</span>':'';
+    const dataAttr=inGuide?`data-common="${common.replace(/"/g,'&quot;')}" data-sci="${sci.replace(/"/g,'&quot;')}"` :'';
+    html+=`<div class="id-result-item ${clickable}" ${dataAttr} onclick="idResultClick(this)">
+      <div class="id-ri-info">
+        <div class="id-ri-common">${commonCap}</div>
+        <div class="id-ri-sci">${sci}</div>
+        ${badge}
+        <div class="id-ri-bar-wrap"><div class="id-ri-bar" style="width:${pct}%"></div></div>
+      </div>
+      <div class="id-ri-pct">${pct}%</div>
+    </div>`;
+  });
+  resultsEl.innerHTML=html;
+  resultsEl.style.display='block';
+}
+
+function idResultClick(el){
+  if(!el.classList.contains('clickable'))return;
+  const common=el.dataset.common||'';
+  const sci=el.dataset.sci||'';
+  const si=getInfo(common)||getInfo(sci.split(' ').slice(0,2).join(' '));
+  if(!si)return;
+  // Build a synthetic tree record for the modal
+  const dbKey=Object.keys(DB).find(k=>getInfo(k)===si)||common;
+  openModalFor({
+    spc_common:dbKey,
+    spc_latin:sci,
+    dbh:'0',
+    health:'Good',
+    nta_name:'Identified by Pl@ntNet',
+    address:''
+  });
+}
+
+function initIdentify(){
+  const saved=localStorage.getItem('plantnet_key');
+  if(saved){
+    document.getElementById('id-key-inp').value=saved;
+    const st=document.getElementById('id-key-status');
+    st.textContent='Key saved ✓';
+    st.className='ok';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════════════
 function go(tab){
@@ -826,6 +1004,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   initMap();
   renderSpecies();
   startGeo();
+  initIdentify();
 });
 </script>
 </body>
