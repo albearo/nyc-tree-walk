@@ -287,10 +287,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Ro
         <div class="cam-ph-icon">📷</div>
         <div>Point your camera at any tree leaf, bark, or fruit<br>and we'll identify the species worldwide.</div>
       </div>
-      <input type="file" id="id-file" accept="image/*" capture="environment" style="display:none" onchange="onIdFile(this)">
+      <input type="file" id="id-file" accept="image/*" style="display:none" onchange="onIdFile(this)">
       <button class="id-snap" onclick="document.getElementById('id-file').click()">📷 Take Photo / Choose Image</button>
     </div>
     <div id="id-results"></div>
+    <div style="text-align:center"><button onclick="document.querySelector('.id-key-box').style.display='block'" style="background:none;border:none;color:var(--muted);font-size:.75rem;cursor:pointer;padding:2px 0">🔑 Change API key</button></div>
     <div class="id-key-box">
       <b>Pl@ntNet API Key</b>
       <p>Free at <a href="https://my.plantnet.org" target="_blank" style="color:var(--gm)">my.plantnet.org</a> — 500 identifications/day. Enter once, saved to your device.</p>
@@ -917,7 +918,7 @@ async function identifyTree(file){
     if(!r.ok){
       const errText=await r.text().catch(()=>'');
       let msg='Identification failed';
-      if(r.status===401||r.status===403)msg='Invalid API key — check your key below';
+      if(r.status===401||r.status===403){msg='Invalid API key — update it below';document.querySelector('.id-key-box').style.display='block';}
       else if(r.status===429)msg='Daily limit reached (500/day) — try again tomorrow';
       else if(errText)try{msg=JSON.parse(errText).message||msg;}catch(_){}
       resultsEl.innerHTML=`<div class="cam-ph"><div class="cam-ph-icon">⚠️</div><div>${msg}</div></div>`;
