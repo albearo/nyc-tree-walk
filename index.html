@@ -900,9 +900,22 @@ function fileToBase64(file){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
     reader.onload=()=>{
-      const base64=reader.result.split(',')[1];
-      const mediaType=file.type||'image/jpeg';
-      resolve({base64,mediaType});
+      const img=new Image();
+      img.onload=()=>{
+        const MAX=1568;
+        let w=img.width,h=img.height;
+        if(w>MAX||h>MAX){
+          if(w>h){h=Math.round(h*MAX/w);w=MAX;}
+          else{w=Math.round(w*MAX/h);h=MAX;}
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        const dataUrl=canvas.toDataURL('image/jpeg',0.85);
+        resolve({base64:dataUrl.split(',')[1],mediaType:'image/jpeg'});
+      };
+      img.onerror=reject;
+      img.src=reader.result;
     };
     reader.onerror=reject;
     reader.readAsDataURL(file);
@@ -955,7 +968,7 @@ async function identifyTree(file){
       let msg='Identification failed';
       if(r.status===401){msg='Invalid API key — update it below';document.querySelector('.id-key-box').style.display='block';}
       else if(r.status===429)msg='Rate limit reached — try again in a moment';
-      else if(r.status===400)msg='Image could not be processed — try a different photo';
+      else if(r.status===400){const e=await r.json().catch(()=>({}));msg='Bad request: '+(e.error&&e.error.message||'try a different photo');}
       resultsEl.innerHTML=`<div class="cam-ph"><div class="cam-ph-icon">⚠️</div><div>${msg}</div></div>`;
       return;
     }
