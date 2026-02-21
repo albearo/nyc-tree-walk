@@ -596,9 +596,9 @@ async function fetchTreesForView(){
 function initMap(){
   S.map=L.map('map',{zoomControl:false,attributionControl:true})
     .setView([40.7128,-74.0060],16);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png',{
-    attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a> contributors © <a href="https://carto.com">CARTO</a> | <a href="https://data.cityofnewyork.us">NYC Open Data</a>',
-    maxZoom:20,subdomains:'abcd'
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'© <a href="https://www.esri.com">Esri</a> | <a href="https://data.cityofnewyork.us">NYC Open Data</a>',
+    maxZoom:20
   }).addTo(S.map);
   L.control.zoom({position:'bottomright'}).addTo(S.map);
   S.map.on('dragstart',()=>{S.follow=false;});
@@ -625,9 +625,11 @@ function updateUserMap(la,lo){
 function renderMapMarkers(){
   S.tMarkers.forEach(({m})=>S.map.removeLayer(m));S.tMarkers=[];
   const hc={'Good':'#43a047','Fair':'#fb8c00','Poor':'#e53935'};
+  const zoom=S.map?S.map.getZoom():16;
+  const zBonus=zoom>=18?7:zoom>=17?5:zoom>=16?3:zoom>=15?1:0;
   S.viewTrees.forEach((t,i)=>{
     const c=hc[t.health]||'#607d8b';
-    const s=t.dbh>20?13:t.dbh>10?10:7;
+    const s=Math.min(20,(t.dbh>20?13:t.dbh>10?10:7)+zBonus);
     const icon=L.divIcon({html:`<div class="tree-dot" style="width:${s}px;height:${s}px;background:${c}"></div>`,className:'',iconSize:[s,s],iconAnchor:[s/2,s/2]});
     const m=L.marker([t.la,t.lo],{icon}).addTo(S.map).on('click',()=>{
       S.map.flyTo([t.la,t.lo],Math.min(S.map.getZoom(),17),{duration:0.5});
